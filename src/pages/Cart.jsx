@@ -3,6 +3,14 @@ import { Footer, Navbar } from "../components";
 import { useSelector, useDispatch } from "react-redux";
 import { addCart, delCart } from "../redux/action";
 import { Link } from "react-router-dom";
+import {
+  LinkPayload,
+  TransferFinishedPayload,
+  createLink,
+} from "@meshconnect/web-link-sdk";
+
+const clientId = process.env.REACT_APP_MESHCONNECT_CLIENT_ID;
+const apiSecret = process.env.REACT_APP_MESHCONNECT_API_SECRET;
 
 const Cart = () => {
   const state = useSelector((state) => state.handleCart);
@@ -28,6 +36,85 @@ const Cart = () => {
   };
   const removeItem = (product) => {
     dispatch(delCart(product));
+  };
+
+  const generateTransactionId = () => {
+    // Generate a random string of 10 characters
+    let transactionId = "";
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 10; i++) {
+      transactionId += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return transactionId;
+  };
+
+  const handleConnectMesh = async (subtotal, shipping) => {
+    try {
+      // 1. Fetch the Link Token
+      const linkToken = await fetchLinkToken(subtotal, shipping);
+
+      // 2. Create the MeshConnect Link
+      const meshLink = await createLink({
+        clientId: clientId, 
+        linkToken: linkToken,
+        onIntegrationConnected: (payload) => {
+          // Handle successful connection (e.g., store access tokens)
+          console.log("Integration connected:", payload);
+        },
+        onExit: (error) => {
+          // Handle link exit (e.g., display a message to the user)
+          if (error) {
+            console.error("MeshConnect link exited with error:", error);
+          } else {
+            console.log("MeshConnect link exited.");
+            window.open("/", "_self");
+          }
+        },
+        //... (add other event handlers as needed)
+      });
+      // Open MeshConnect
+      meshLink.openLink(linkToken);
+    } catch (error) {
+      console.error("Error creating MeshConnect link:", error);
+      // Handle the error (e.g., display an error message)
+    }
+  };
+
+  const fetchLinkToken = async (subtotal, shipping) => {
+    const response = await fetch(
+      "https://sandbox-integration-api.meshconnect.com/api/v1/linktoken",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Id": clientId,
+          "X-Client-Secret": apiSecret,
+        },
+        body: JSON.stringify({
+          userId: "Mesh",
+          restrictMultipleAccounts: true,
+          transferOptions: {
+            toAddresses: [
+              {
+                networkId: "e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
+                symbol: "USDC",
+                address: "0x0Ff0000f0A0f0000F0F000000000ffFf00f0F0f0",
+              }
+            ],
+            fundingOptions: {
+              enabled: true
+            },
+            transactionId: generateTransactionId(),
+            amountInFiat: Math.round(subtotal + shipping),
+            isInclusiveFeeEnabled: false,
+          },
+          disableApiKeyGeneration: false,
+        }),
+      }
+    );
+
+    const data = await response.json();
+    return data.content.linkToken; // Assuming the response contains a 'linkToken' field
   };
 
   const ShowCart = () => {
@@ -151,6 +238,10 @@ const Cart = () => {
                     >
                       Go to checkout
                     </Link>
+
+                    <button onClick={() => handleConnectMesh(subtotal, shipping)} className="btn btn-primary">
+                      Connect with Mesh
+                    </button>
                   </div>
                 </div>
               </div>
@@ -167,7 +258,7 @@ const Cart = () => {
       <div className="container my-3 py-3">
         <h1 className="text-center">Cart</h1>
         <hr />
-        {state.length > 0 ? <ShowCart /> : <EmptyCart />}
+        {state.length > 0? <ShowCart />: <EmptyCart />}
       </div>
       <Footer />
     </>

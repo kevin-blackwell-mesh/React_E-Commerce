@@ -13,15 +13,13 @@ const clientId = process.env.REACT_APP_MESHCONNECT_CLIENT_ID_PROD;
 const apiSecret = process.env.REACT_APP_MESHCONNECT_API_SECRET_PROD;
 const baseUrl = process.env.REACT_APP_MESHCONNECT_URL_PROD;
 
-const Cart = () => {
+const PreviouslyAuthedUser = () => {
   const state = useSelector((state) => state.handleCart);
   const dispatch = useDispatch();
 
   // State to store portfolio data and connection status
   const [coinbasePortfolio, setCoinbasePortfolio] = useState(null);
-  const [coinbaseIntegrationId, setCoinbaseIntegrationId] = useState(null);
-  const [transferStatus, setTransferStatus] = useState("");
-  const [previewIdCoinBase, setpreviewIdCoinBase] = useState("")
+  const [coinbaseAccessTokens, setCoinbaseAccessTokens] = useState("");
 
   const EmptyCart = () => {
     return (
@@ -43,130 +41,6 @@ const Cart = () => {
   };
   const removeItem = (product) => {
     dispatch(delCart(product));
-  };
-
-  const generateTransactionId = () => {
-    // Generate a random string of 10 characters
-    let transactionId = "";
-    const characters =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 10; i++) {
-      transactionId += characters.charAt(
-        Math.floor(Math.random() * characters.length)
-      );
-    }
-    return transactionId;
-  };
-
-  const handleConnectMeshWallet = async (
-    integrationName,
-    subtotal,
-    shipping,
-    networkId
-  ) => {
-    try {
-      // 1. Fetch the Link Token from backend
-      const linkToken = await fetchLinkTokenWallet(
-        integrationName,
-        subtotal,
-        shipping,
-        networkId
-      );
-
-      // 2. Create the MeshConnect Link
-      const meshLink = await createLink({
-        clientId: clientId,
-        linkToken: linkToken,
-        onIntegrationConnected: async (payload) => {
-          console.log("Integration connected:", payload);
-          toast.success(`${integrationName} Connected!`);
-          
-
-          // Store authToken
-          if (integrationName === "Coinbase") {
-            setCoinbaseIntegrationId(payload.accessToken.accountTokens[0].accessToken);
-            // setCoinbaseIntegrationId(payload.authToken);
-            
-          }
-
-          // Fetch and display portfolio data
-          try {
-            const portfolio = await fetchPortfolio(
-                payload.accessToken.accountTokens[0].accessToken, "coinbase"
-                // coinbaseIntegrationId, "coinbase"
-            );
-            
-            if (integrationName === "Coinbase") {
-              setCoinbasePortfolio(portfolio);
-            }
-          } catch (error) {
-            console.error("Error fetching portfolio:", error);
-            toast.error(`Error fetching ${integrationName} portfolio`);
-          }
-        },
-        onExit: (error) => {
-          // Handle link exit (e.g., display a message to the user)
-          if (error) {
-            console.error("MeshConnect link exited with error:", error);
-            toast.error(`Error connecting to ${integrationName}`);
-          } else {
-            console.log("MeshConnect link exited.");
-            toast.success(`${integrationName} connection closed.`);
-          }
-        },
-      });
-      
-      // Open MeshConnect
-      meshLink.openLink(linkToken);
-    } catch (error) {
-      console.error("Error creating MeshConnect link:", error);
-      toast.error(`Failed to connect to ${integrationName}`);
-      // Handle the error (e.g., display an error message)
-    }
-  };
-
-  const fetchLinkTokenWallet = async (
-    integrationName,
-    subtotal,
-    shipping,
-  ) => {
-    const response = await fetch(baseUrl + "/api/v1/linktoken", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Client-Id": clientId,
-        "X-Client-Secret": apiSecret,
-      },
-      body: JSON.stringify({
-        userId: "Mesh",
-        disableApiKeyGeneration: false,
-        transferOptions: {
-            toAddresses: [
-              {
-                networkId: "e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
-                symbol: "USDC",
-                address: "0x8B277962508EC19305F2a0b280C1E23ba8A7dEe6",
-              }
-            ],
-            fundingOptions: {
-              enabled: true
-            },
-            transactionId: generateTransactionId(),
-            amountInFiat: 1,
-            isInclusiveFeeEnabled: false,
-          }
-      }),
-    });
-
-    
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.message || "Failed to fetch link token");
-    }
-
-    console.log(data.content.linkToken)
-    return data.content.linkToken;
   };
 
   const handleConnectMesh = async (
@@ -191,22 +65,27 @@ const Cart = () => {
         onIntegrationConnected: async (payload) => {
           console.log("Integration connected:", payload);
           toast.success(`${integrationName} Connected!`);
-          
+          var accessToken = [
+            {
+              "accessToken": payload.accessToken.accountTokens[0].accessToken,
+              "brokerType": payload.accessToken.brokerType,
+              "accountId": payload.accessToken.accountTokens[0].account.accountId,
+              "accountName": payload.accessToken.accountTokens[0].account.accountName,
+              "brokerName": payload.accessToken.brokerName
+            }
+          ]
 
-          // Store authToken
-          if (integrationName === "Coinbase") {
-            setCoinbaseIntegrationId(payload.accessToken.accountTokens[0].accessToken);
-            // setCoinbaseIntegrationId(payload.authToken);
-            
-          }
+          setCoinbaseAccessTokens(accessToken)
+          console.log(accessToken)
+
 
           // Fetch and display portfolio data
           try {
             const portfolio = await fetchPortfolio(
-                payload.accessToken.accountTokens[0].accessToken, "coinbase"
-                // coinbaseIntegrationId, "coinbase"
+              payload.accessToken.accountTokens[0].accessToken, "coinbase"
+              // coinbaseIntegrationId, "coinbase"
             );
-            
+
             if (integrationName === "Coinbase") {
               setCoinbasePortfolio(portfolio);
             }
@@ -226,7 +105,38 @@ const Cart = () => {
           }
         },
       });
-      
+
+      // Open MeshConnect
+      meshLink.openLink(linkToken);
+    } catch (error) {
+      console.error("Error creating MeshConnect link:", error);
+      toast.error(`Failed to connect to ${integrationName}`);
+      // Handle the error (e.g., display an error message)
+    }
+  };
+
+  const reconnectMesh = async (
+    integrationName,
+    subtotal,
+    shipping,
+    networkId
+  ) => {
+    try {
+      // 1. Fetch the Link Token from backend
+      const linkToken = await fetchLinkTokenReconnect(
+        integrationName,
+        subtotal,
+        shipping,
+        networkId
+      );
+
+      // 2. Create the MeshConnect Link
+      const meshLink = await createLink({
+        // clientId: clientId,
+        linkToken: linkToken,
+        accessTokens: coinbaseAccessTokens,
+      });
+
       // Open MeshConnect
       meshLink.openLink(linkToken);
     } catch (error) {
@@ -240,7 +150,7 @@ const Cart = () => {
     integrationName,
     subtotal,
     shipping,
-    integrationId = integrationName === "Coinbase" ? "aa883b03-120d-477c-a588-37c2afd3ca71" : null
+    integrationId = "aa883b03-120d-477c-a588-37c2afd3ca71"
   ) => {
     const response = await fetch(baseUrl + "/api/v1/linktoken", {
       method: "POST",
@@ -256,7 +166,48 @@ const Cart = () => {
       }),
     });
 
-    
+
+
+
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to fetch link token");
+    }
+
+    console.log(data.content.linkToken)
+    return data.content.linkToken;
+  };
+
+  const fetchLinkTokenReconnect = async (
+    integrationName,
+    subtotal,
+    shipping,
+  ) => {
+    const response = await fetch(baseUrl + "/api/v1/linktoken", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Id": clientId,
+        "X-Client-Secret": apiSecret,
+      },
+      body: JSON.stringify({
+        userId: "Mesh",
+        disableApiKeyGeneration: false,
+        transferOptions: {
+          toAddresses: [
+            {
+              networkId: "e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
+              symbol: "USDC",
+              address: "0x0Ff0000f0A0f0000F0F000000000ffFf00f0F0f0",
+            }
+          ],
+          fundingOptions: {
+            enabled: true
+          },
+        }
+      }),
+    });
 
     const data = await response.json();
     if (!response.ok) {
@@ -286,129 +237,6 @@ const Cart = () => {
       throw new Error(data.message || "Failed to fetch portfolio");
     }
     return data;
-  };
-
-  const initiateTransfer = async (
-    authToken,
-    broker
-  ) => {
-    setTransferStatus(`Initiating ${broker} transfer...`);
-    try {
-        const response = await fetch(baseUrl + "/api/v1/transfers/managed/preview", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": clientId,
-          "X-Client-Secret": apiSecret,
-        },
-        body: JSON.stringify({
-          fromAuthToken: authToken,
-          amount: 1,
-          fromType: broker,
-          symbol: "USDC",
-          networkId: "aa883b03-120d-477c-a588-37c2afd3ca71",
-        //   addressType: "ethAddress",
-          toAddress: "0x8f303149B4bac987aCb8c9B40ED3A0b8E26CE4F8", 
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Transfer failed");
-      }
-      setTransferStatus(
-        `${broker} transfer preview successful`
-      ); 
-      toast.success(`${broker} Preview Available`);
-
-      setpreviewIdCoinBase(data.content.previewResult.previewId)
-      if (broker === "coinbase") {
-        initateExecuteTransfer(authToken,broker,data.content.previewResult.previewId)
-      }
-      
-    } catch (error) {
-      console.error("Error initiating transfer:", error);
-      setTransferStatus(`Error initiating ${broker} transfer`);
-      toast.error(`Error Transferring from ${broker}`);
-    }
-  };
-
-  const initateExecuteTransfer = async (
-    authToken,
-    broker,
-    previewId,
-  ) => {
-    try {
-        console.log(broker)
-      const response = await fetch(baseUrl + "/api/v1/transfers/managed/execute", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": clientId,
-          "X-Client-Secret": apiSecret,
-        },
-        body: JSON.stringify({
-          fromAuthToken: authToken,
-          fromType: broker,
-          previewId: previewId,
-        }),
-      });
-
-      
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Transfer failed");
-      }
-      setTransferStatus(
-        `${broker} MFA Sent`
-      ); 
-      toast.success(`${broker} MFA Code Sent`);
-    } catch (error) {
-      console.error("Error initiating transfer:", error);
-      setTransferStatus(`Error initiating ${broker} transfer`);
-      toast.error(`Error Transferring from ${broker}`);
-    }
-  };
-
-  const executeTransfer = async (
-    authToken,
-    broker,
-    previewId,
-    mfa = document.querySelector('#mfa').value ? document.querySelector('#mfa').value : null
-  ) => {
-    try {
-        console.log(broker)
-      const response = await fetch(baseUrl + "/api/v1/transfers/managed/execute", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": clientId,
-          "X-Client-Secret": apiSecret,
-        },
-        body: JSON.stringify({
-          fromAuthToken: authToken,
-          fromType: broker,
-          previewId: previewId,
-          mfaCode: mfa
-        }),
-      });
-
-      
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || "Transfer failed");
-      }
-      setTransferStatus(
-        `${broker} transfer successful`
-      ); 
-      toast.success(`${broker} Transfer Successful`);
-    } catch (error) {
-      console.error("Error initiating transfer:", error);
-      setTransferStatus(`Error initiating ${broker} transfer`);
-      toast.error(`Error Transferring from ${broker}`);
-    }
   };
 
   const ShowCart = () => {
@@ -549,43 +377,10 @@ const Cart = () => {
                     >
                       Connect Coinbase
                     </button>
-                    {coinbasePortfolio && (<h6>Coinbase Portfolio</h6>)}
-                    {coinbasePortfolio?.content.cryptocurrencyPositions.map((balance) => (
-                      <div key={balance.name}>
-                        {balance.symbol}: {balance.amount}
-                      </div>
-                    ))}
-                    {coinbaseIntegrationId && (
-                      <button
-                        onClick={() =>
-                          initiateTransfer(coinbaseIntegrationId, 'coinbase')
-                        }
-                        className="btn btn-sm btn-success m-2"
-                      >
-                        Transfer $5 USDC from Coinbase
-                      </button>
-                    )}
-
-                    {coinbaseIntegrationId && (
-                      <input name="mfa" type="text" id="mfa"></input>
-                    )}
-
-                    {coinbaseIntegrationId && (
-                      <button
-                        onClick={() =>
-                          executeTransfer(coinbaseIntegrationId, 'coinbase', previewIdCoinBase)
-                        }
-                        className="btn btn-sm btn-success m-2"
-                      >
-                        Submit MFA
-                      </button>
-                    )}
-
-                    {/* Rainbow Connect and Transfer */}
                     <button
                       onClick={() =>
-                        handleConnectMeshWallet(
-                          "defiWallet",
+                        reconnectMesh(
+                          "Coinbase",
                           subtotal,
                           shipping,
                           "e3c7fdd8-b1fc-4e51-85ae-bb276e075611"
@@ -593,9 +388,14 @@ const Cart = () => {
                       }
                       className="btn btn-lg btn-primary m-2"
                     >
-                      Connect MetaMask
+                      Reconnect Coinbase
                     </button>
-                    <p>{transferStatus}</p>
+                    {coinbasePortfolio && (<h6>Coinbase Portfolio</h6>)}
+                    {coinbasePortfolio?.content.cryptocurrencyPositions.map((balance) => (
+                      <div key={balance.name}>
+                        {balance.symbol}: {balance.amount}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -619,4 +419,4 @@ const Cart = () => {
   );
 };
 
-export default Cart;
+export default PreviouslyAuthedUser;
